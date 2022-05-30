@@ -29,5 +29,8 @@
     <ClInclude Include="RenderHelp.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Bitmap.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

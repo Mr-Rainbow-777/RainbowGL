@@ -112,59 +112,51 @@ inline static Mat4x4f matrix_set_scale(float x, float y, float z) {
 	return m;
 }
 
-// 旋转编号，围绕 (x, y, z) 矢量旋转 theta 角度
-inline static Mat4x4f matrix_set_rotate(float x, float y, float z, float theta) {
-	float qsin = (float)sin(theta * 0.5f);
-	float qcos = (float)cos(theta * 0.5f);
-	float w = qcos;
-	Vec3f vec = vector_normalize(Vec3f(x, y, z));
-	
-	x = vec.x * qsin;
-	y = vec.y * qsin;
-	z = vec.z * qsin;
+// Local2World矩阵
+inline static Mat4x4f Model2World_Matrix(const Vec3f& pos,const Vec3f& xAxis, const Vec3f& yAxis, const Vec3f& zAxis) {
 	Mat4x4f m;
-	m.m[0][0] = 1 - 2 * y * y - 2 * z * z;
-	m.m[1][0] = 2 * x * y - 2 * w * z;
-	m.m[2][0] = 2 * x * z + 2 * w * y;
-	m.m[0][1] = 2 * x * y + 2 * w * z;
-	m.m[1][1] = 1 - 2 * x * x - 2 * z * z;
-	m.m[2][1] = 2 * y * z - 2 * w * x;
-	m.m[0][2] = 2 * x * z - 2 * w * y;
-	m.m[1][2] = 2 * y * z + 2 * w * x;
-	m.m[2][2] = 1 - 2 * x * x - 2 * y * y;
-	m.m[0][3] = m.m[1][3] = m.m[2][3] = 0.0f;
-	m.m[3][0] = m.m[3][1] = m.m[3][2] = 0.0f;
-	m.m[3][3] = 1.0f;
+	m.SetRow(0, Vec4f(xAxis.x, xAxis.y, xAxis.z, 0));
+	m.SetRow(1, Vec4f(yAxis.x, yAxis.y, yAxis.z, 0));
+	m.SetRow(2, Vec4f(zAxis.x, zAxis.y, zAxis.z, 0));
+	m.SetCol(3, Vec4f(pos.x, pos.y, pos.z, 1.0f));
 	return m;
 }
 
 // 摄影机变换矩阵：eye/视点位置，at/看向哪里，up/指向上方的矢量  
 //Camera2World矩阵
 inline static Mat4x4f matrix_set_lookat(const Vec3f& eye, const Vec3f& at, const Vec3f& up) {
-	Vec3f zaxis = vector_normalize(at - eye);
+	Vec3f zaxis = vector_normalize(eye-at);
 	Vec3f xaxis = vector_normalize(vector_cross(up, zaxis));
-	Vec3f yaxis = vector_cross(zaxis, xaxis);
+	Vec3f yaxis = vector_cross(xaxis, zaxis);
 	Mat4x4f m;
-	m.SetCol(0, Vec4f(xaxis.x, xaxis.y, xaxis.z, -vector_dot(eye, xaxis)));
-	m.SetCol(1, Vec4f(yaxis.x, yaxis.y, yaxis.z, -vector_dot(eye, yaxis)));
-	m.SetCol(2, Vec4f(zaxis.x, zaxis.y, zaxis.z, -vector_dot(eye, zaxis)));
-	m.SetCol(3, Vec4f(0.0f, 0.0f, 0.0f, 1.0f));
+	m.SetRow(0, Vec4f(xaxis.x, xaxis.y, xaxis.z, 0));
+	m.SetRow(1, Vec4f(yaxis.x, yaxis.y, yaxis.z, 0));
+	m.SetRow(2, Vec4f(zaxis.x, zaxis.y, zaxis.z, 0));
+	m.SetCol(3, Vec4f(eye.x,eye.y,eye.z, 1.0f));
 	return m;
 }
 
-inline static Mat4x4f World2Camera(const Vec3f& eye, const Vec3f& at, const Vec3f& up)
+
+//View矩阵  (右乘)
+inline static Mat4x4f World2Camera_Matrix(const Vec3f& eye, const Vec3f& at, const Vec3f& up)
 {
 	Mat4x4f m = matrix_set_lookat(eye, at, up);
 	return matrix_invert(m);
 }
 
 
-// D3DXMatrixPerspectiveFovLH
-inline static Mat4x4f matrix_set_perspective(float fovy, float aspect, float zn, float zf) {
-	float fax = 1.0f / (float)tan(fovy * 0.5f);
+/// <summary>
+/// 投影矩阵
+/// </summary>
+/// <param name="fovy">视域:thera角</param>
+/// <param name="zn"></param>
+/// <param name="zf"></param>
+/// <returns></returns>
+inline static Mat4x4f Projection_Matrix(float fovy, float zn, float zf) {
+	float scale = 1.0f / (float)tan(fovy * 0.5f);
 	Mat4x4f m = matrix_set_zero();
-	m.m[0][0] = (float)(fax / aspect);
-	m.m[1][1] = (float)(fax);
+	m.m[0][0] = scale;
+	m.m[1][1] = scale;
 	m.m[2][2] = zf / (zf - zn);
 	m.m[3][2] = -zn * zf / (zf - zn);
 	m.m[2][3] = 1;

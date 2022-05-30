@@ -24,6 +24,7 @@
     <ProjectGuid>{345ba104-bc31-4e41-8d20-c0177b3391e2}</ProjectGuid>
     <RootNamespace>RainbowD3D</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>RainbowGL</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -130,6 +131,7 @@
     <ClCompile Include="RainbowD3D.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Bitmap.h" />
     <ClInclude Include="Matrix.h" />
     <ClInclude Include="RenderHelp.h" />
     <ClInclude Include="Vector.h" />
