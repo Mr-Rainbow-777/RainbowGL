@@ -5,7 +5,9 @@
 
 #include "Vector.h";
 #include "Matrix.h";
-
+#include <map>
+#include <functional>
+#include "Bitmap.h"
 
 //---------------------------------------------------------------------
 // 工具函数
@@ -157,17 +159,256 @@ inline static Mat4x4f Projection_Matrix(float fovy, float zn, float zf) {
 	Mat4x4f m = matrix_set_zero();
 	m.m[0][0] = scale;
 	m.m[1][1] = scale;
-	m.m[2][2] = zf / (zf - zn);
-	m.m[3][2] = -zn * zf / (zf - zn);
-	m.m[2][3] = 1;
+	m.m[2][2] = -zf / (zf - zn);
+	m.m[3][2] = -zf * zn / (zf - zn);
+	m.m[2][3] = -1;//set w = -z 
 	return m;
 }
 
+//---------------------------------------------------------------------
+// 着色器定义
+//---------------------------------------------------------------------
+
+// 着色器上下文，由 VS 设置，再由渲染器按像素逐点插值后，供 PS 读取
+struct ShaderContext {
+	std::map<int, float> varying_float;    // 浮点数 varying 列表
+	std::map<int, Vec2f> varying_vec2f;    // 二维矢量 varying 列表
+	std::map<int, Vec3f> varying_vec3f;    // 三维矢量 varying 列表
+	std::map<int, Vec4f> varying_vec4f;    // 四维矢量 varying 列表
+};
+
+
+// 顶点着色器：因为是 C++ 编写，无需传递 attribute，传个 0-2 的顶点序号
+// 着色器函数直接在外层根据序号读取相应数据即可，最后需要返回一个坐标 pos
+// 各项 varying 设置到 output 里，由渲染器插值后传递给 PS 
+typedef std::function<Vec4f(int index, ShaderContext& output)> VertexShader;
+
+
+// 像素着色器：输入 ShaderContext，需要返回 Vec4f 类型的颜色
+// 三角形内每个点的 input 具体值会根据前面三个顶点的 output 插值得到
+typedef std::function<Vec4f(ShaderContext& input)> PixelShader;   //函数指针
+
+
+
+class RenderHelp
+{
+public:
+
+	inline virtual ~RenderHelp() { Reset(); }
+
+
+
+	//默认填充内部像素，不描线框
+	inline RenderHelp() {
+		_frame_buffer = NULL;
+		_depth_buffer = NULL;
+		_render_frame = false;
+		_render_pixel = true;
+	}
+
+	inline RenderHelp(int width, int height) {
+		_frame_buffer = NULL;
+		_depth_buffer = NULL;
+		_render_frame = false;
+		_render_pixel = true;
+		Init(width, height);
+	}
+
+public:
+
+	// 复位状态
+	inline void Reset() {
+		_vertex_shader = NULL;
+		_pixel_shader = NULL;
+		if (_frame_buffer) delete _frame_buffer;
+		_frame_buffer = NULL;
+		if (_depth_buffer) {
+			for (int j = 0; j < _fb_height; j++) {
+				if (_depth_buffer[j]) delete[]_depth_buffer[j];  //释放帧缓存和深度缓存
+				_depth_buffer[j] = NULL;
+			}
+			delete[]_depth_buffer;
+			_depth_buffer = NULL;
+		}
+		_color_fg = 0xffffffff;
+		_color_bg = 0xff191970;
+	}
+
+
+	// 初始化 FrameBuffer，渲染前需要先调用
+	inline void Init(int width, int height) {
+		Reset();
+		_frame_buffer = new Bitmap(width, height);
+		_fb_width = width;   //设置图片的宽度像素
+		_fb_height = height;   //高度像素
+		_depth_buffer = new float* [height];  //创建深度缓存的动态内存
+		for (int j = 0; j < height; j++) {
+			_depth_buffer[j] = new float[width];
+		}
+		Clear();
+	}
+
+	// 清空 FrameBuffer 和深度缓存
+	inline void Clear() {
+		if (_frame_buffer) {
+			_frame_buffer->Fill(_color_bg);
+		}
+		if (_depth_buffer) {
+			for (int j = 0; j < _fb_height; j++) {
+				for (int i = 0; i < _fb_width; i++)
+					_depth_buffer[j][i] = 0.0f;
+			}
+		}
+	}
+
+	// 设置 VS/PS 着色器函数
+	inline void SetVertexShader(VertexShader vs) { _vertex_shader = vs; }
+	inline void SetPixelShader(PixelShader ps) { _pixel_shader = ps; }
+
+	// 保存 FrameBuffer 到 BMP 文件
+	inline void SaveFile(const char* filename) { if (_frame_buffer) _frame_buffer->SaveFile(filename); }
+
+	// 设置背景/前景色
+	inline void SetBGColor(uint32_t color) { _color_bg = color; }
+	inline void SetFGColor(uint32_t color) { _color_fg = color; }
+
+	// FrameBuffer 里画点
+	inline void SetPixel(int x, int y, uint32_t cc) { if (_frame_buffer) _frame_buffer->SetPixel(x, y, cc); }
+	inline void SetPixel(int x, int y, const Vec4f& cc) { SetPixel(x, y, vector_to_color(cc)); }
+	inline void SetPixel(int x, int y, const Vec3f& cc) { SetPixel(x, y, vector_to_color(cc)); }
+
+
+	// FrameBuffer 里画线
+	inline void DrawLine(int x1, int y1, int x2, int y2) {
+		if (_frame_buffer) _frame_buffer->DrawLine(x1, y1, x2, y2, _color_fg);
+	}
+
+	// 设置渲染状态，是否显示线框图，是否填充三角形
+	inline void SetRenderState(bool frame, bool pixel) {
+		_render_frame = frame;
+		_render_pixel = pixel;
+	}
+
+	// 判断一条边是不是三角形的左上边 (Top-Left Edge)
+	inline bool IsTopLeft(const Vec2i& a, const Vec2i& b) {
+		return ((a.y == b.y) && (a.x < b.x)) || (a.y > b.y);
+	}
+
+
+public:
+	// 绘制一个三角形，必须先设定好着色器函数
+	inline bool DrawPrimitive()
+	{
+		//如果
+		if (_frame_buffer == NULL || _vertex_shader == NULL)  
+			return false;
+
+		// 顶点初始化
+		for (size_t i = 0; i < 3; ++i)
+		{
+			Vertex& vertex = _vertex[i];
+
+			// 在对顶点进行外部赋值时需要进行重置   清空上下文 varying 列表
+			vertex.context.varying_float.clear();
+			vertex.context.varying_vec2f.clear();
+			vertex.context.varying_vec3f.clear();
+			vertex.context.varying_vec4f.clear();
+
+			// 运行顶点着色程序，返回顶点坐标
+			vertex.pos = _vertex_shader(i, vertex.context);
+
+			//此时处在裁剪空间下  顶点已经经过MVP矩阵变换
+			// 运行顶点着色程序，返回顶点坐标
+			vertex.pos = _vertex_shader(i, vertex.context);
+
+			// 简单裁剪，任何一个顶点超过 CVV 就剔除
+			float w = vertex.pos.w;
+
+			// 这里图简单，当一个点越界，立马放弃整个三角形，更精细的做法是
+			// 如果越界了就在齐次空间内进行裁剪，拆分为 0-2 个三角形然后继续
+			if (w >= 0.0f) return false;
+			if (-w<=vertex.pos.z<=w) return false;
+			if (-w <= vertex.pos.y <= w) return false;
+			if (-w <= vertex.pos.x <= w) return false;
+
+			// 齐次坐标空间 /w 归一化到单位体积 cvv     转换到NDC坐标
+			vertex.pos /= vertex.pos.w;
+
+			// 计算屏幕坐标
+			vertex.spf.x = (vertex.pos.x + 1.0f) * _fb_width * 0.5f;
+			vertex.spf.y = (1.0f - vertex.pos.y) * _fb_height * 0.5f;
+
+			// 整数屏幕坐标：加 0.5 的偏移取屏幕像素方格中心对齐
+			vertex.spi.x = (int)(vertex.spf.x + 0.5f);
+			vertex.spi.y = (int)(vertex.spf.y + 0.5f);
+
+			//倒置顶点的z
+			vertex.z = -vertex.pos.z;
+
+			// 更新外接矩形范围（三角形的最大外接矩形）
+			if (i == 0) {
+				_min_x = _max_x = Between(0, _fb_width - 1, vertex.spi.x);
+				_min_y = _max_y = Between(0, _fb_height - 1, vertex.spi.y);
+			}
+			else {
+				_min_x = Between(0, _fb_width - 1, Min(_min_x, vertex.spi.x));
+				_max_x = Between(0, _fb_width - 1, Max(_max_x, vertex.spi.x));
+				_min_y = Between(0, _fb_height - 1, Min(_min_y, vertex.spi.y));
+				_max_y = Between(0, _fb_height - 1, Max(_max_y, vertex.spi.y));
+			}
 
 
 
 
 
+
+
+		}
+
+
+
+	}
+
+
+
+
+
+protected:
+
+	// 顶点结构体
+	struct Vertex {
+		ShaderContext context;    // 上下文
+		float z;                // w 的倒数
+		Vec4f pos;                // 坐标
+		Vec2f spf;                // 浮点数屏幕坐标
+		Vec2i spi;                // 整数屏幕坐标
+	};
+
+protected:
+	Bitmap* _frame_buffer;    // 像素缓存
+	float** _depth_buffer;    // 深度缓存   双指针=》二维数组  保存的是深度信息Z
+
+	int _fb_width;            // frame buffer 宽度
+	int _fb_height;           // frame buffer 高度
+
+	uint32_t _color_fg;       // 前景色：画线时候用
+	uint32_t _color_bg;       // 背景色：Clear 时候用
+
+	Vertex _vertex[3];        // 三角形的三个顶点
+
+	int _min_x;               // 三角形外接矩形
+	int _min_y;
+	int _max_x;
+	int _max_y;
+
+	bool _render_frame;       // 是否绘制线框
+	bool _render_pixel;       // 是否填充像素
+
+	VertexShader _vertex_shader;   //顶点数据处理函数的接口函数 
+	PixelShader _pixel_shader;     //像素处理函数的接口函数
+
+
+};
 
 #endif // !_RENDER_HELP_
 
