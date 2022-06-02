@@ -9,6 +9,7 @@
 #include <functional>
 #include "Bitmap.h"
 
+
 //---------------------------------------------------------------------
 // 工具函数
 //---------------------------------------------------------------------
@@ -295,6 +296,12 @@ public:
 	}
 
 
+	inline bool edgeFunction(const Vec2f& p, const Vec2i v0, const Vec2i v1)
+	{
+		return (p.x - v0.x) * (v1.y - v0.y) - (p.y - v0.y) * (v1.x - v0.x) >= 0;
+	}
+
+
 public:
 	// 绘制一个三角形，必须先设定好着色器函数
 	inline bool DrawPrimitive()
@@ -331,8 +338,10 @@ public:
 			if (-w <= vertex.pos.y <= w) return false;
 			if (-w <= vertex.pos.x <= w) return false;
 
+			vertex.rhw = -1 / vertex.pos.w;   //此时的w是-z  我们将它倒置然后取反，得到的是线性的深度值，避免了ZFighting
+
 			// 齐次坐标空间 /w 归一化到单位体积 cvv     转换到NDC坐标
-			vertex.pos /= vertex.pos.w;
+			vertex.pos *= vertex.rhw;
 
 			// 计算屏幕坐标
 			vertex.spf.x = (vertex.pos.x + 1.0f) * _fb_width * 0.5f;
@@ -342,8 +351,6 @@ public:
 			vertex.spi.x = (int)(vertex.spf.x + 0.5f);
 			vertex.spi.y = (int)(vertex.spf.y + 0.5f);
 
-			//倒置顶点的z
-			vertex.z = -vertex.pos.z;
 
 			// 更新外接矩形范围（三角形的最大外接矩形）
 			if (i == 0) {
@@ -357,6 +364,155 @@ public:
 				_max_y = Between(0, _fb_height - 1, Max(_max_y, vertex.spi.y));
 			}
 
+			// 如果不填充像素就退出
+			if (_render_pixel == false) return false;
+
+
+			// 判断三角形朝向
+			Vec4f v01 = _vertex[1].pos - _vertex[0].pos;
+			Vec4f v02 = _vertex[2].pos - _vertex[0].pos;
+			Vec4f normal = vector_cross(v01, v02);
+
+			// 使用 vtx 访问三个顶点，而不直接用 _vertex 访问，因为可能会调整顺序
+			Vertex* vtx[3] = { &_vertex[0], &_vertex[1], &_vertex[2] };
+
+			// 如果背向视点，则交换顶点，保证 edge equation 判断的符号为正  
+			if (normal.z > 0.0f) {
+				vtx[1] = &_vertex[2];
+				vtx[2] = &_vertex[1];
+			}
+			else if (normal.z == 0.0f) {
+				return false;
+			}
+
+			// 保存三个端点位置
+			Vec2i v0 = vtx[0]->spi;
+			Vec2i v1 = vtx[1]->spi;
+			Vec2i v2 = vtx[2]->spi;
+
+			// 计算面积，为零就退出
+			float s = Abs(vector_cross(v1 - v0, v2 - v0));
+			if (s <= 0) return false;
+
+			for (size_t cy = _min_y; cy < _max_y; cy++)
+			{
+				for (size_t cx = _min_x; cx < _max_x; cx++)
+				{
+					Vec2f p = { (float)cx + 0.5f, (float)cy + 0.5f };
+					bool inside=true;
+					inside &= edgeFunction(p, v0, v1);
+					inside &= edgeFunction(p, v1, v2);
+					inside &= edgeFunction(p, v2, v0);
+
+					if (!inside) { continue; }
+
+					// 三个端点到当前点的矢量
+					Vec2f s0 = vtx[0]->spf - p;
+					Vec2f s1 = vtx[1]->spf - p;
+					Vec2f s2 = vtx[2]->spf - p;
+
+
+					// 重心坐标系：计算内部子三角形面积 a / b / c
+					float a = Abs(vector_cross(s1, s2));    // 子三角形 P-v1-v2 面积
+					float b = Abs(vector_cross(s2, s0));    // 子三角形 P-v2-v0 面积
+					float c = Abs(vector_cross(s0, s1));    // 子三角形 P-v0-v1 面积
+					float s = a + b + c;                    // 大三角形 P0-P1-P2 面积
+
+					if (s == 0.0f) continue;
+
+					// 除以总面积，以保证：a + b + c = 1，方便用作插值系数
+					a = a * (1.0f / s);
+					b = b * (1.0f / s);
+					c = c * (1.0f / s);
+
+					// 计算当前点的 1/w，因 1/w 和屏幕空间呈线性关系，故直接重心插值
+					float rhw = vtx[0]->rhw * a + vtx[1]->rhw * b + vtx[2]->rhw * c;
+
+					// 进行深度测试
+					if (rhw < _depth_buffer[cy][cx]) continue;
+					_depth_buffer[cy][cx] = rhw;   // 记录 1/w 到深度缓存
+
+					// 还原当前像素的 w
+					float w = 1.0f / ((rhw != 0.0f) ? rhw : 1.0f);
+
+					// 计算三个顶点插值 varying 的系数
+					// 先除以各自顶点的 w 然后进行屏幕空间插值然后再乘以当前 w
+					float c0 = vtx[0]->rhw * a * w;
+					float c1 = vtx[1]->rhw * b * w;
+					float c2 = vtx[2]->rhw * c * w;
+
+					// 还原当前像素的 w
+					float w = 1.0f / ((rhw != 0.0f) ? rhw : 1.0f);
+
+					// 计算三个顶点插值 varying 的系数
+					// 先除以各自顶点的 w 然后进行屏幕空间插值然后再乘以当前 w
+					float c0 = vtx[0]->rhw * a * w;
+					float c1 = vtx[1]->rhw * b * w;
+					float c2 = vtx[2]->rhw * c * w;
+
+					// 准备为当前像素的各项 varying 进行插值  ，这个插值完的像素点数据需要传给片元着色器，进行像素着色处理
+					ShaderContext input;
+
+					//拿到每个顶点的待处理数据，坐标  比如：法线，uv坐标等等
+					ShaderContext& i0 = vtx[0]->context;
+					ShaderContext& i1 = vtx[1]->context;
+					ShaderContext& i2 = vtx[2]->context;
+
+					// 插值各项 varying
+					for (auto const& it : i0.varying_float) {
+						int key = it.first;
+						float f0 = i0.varying_float[key];
+						float f1 = i1.varying_float[key];
+						float f2 = i2.varying_float[key];
+						input.varying_float[key] = c0 * f0 + c1 * f1 + c2 * f2;
+					}
+
+					for (auto const& it : i0.varying_vec2f) {
+						int key = it.first;
+						const Vec2f& f0 = i0.varying_vec2f[key];
+						const Vec2f& f1 = i1.varying_vec2f[key];
+						const Vec2f& f2 = i2.varying_vec2f[key];
+						input.varying_vec2f[key] = c0 * f0 + c1 * f1 + c2 * f2;
+					}
+
+					for (auto const& it : i0.varying_vec3f) {
+						int key = it.first;
+						const Vec3f& f0 = i0.varying_vec3f[key];
+						const Vec3f& f1 = i1.varying_vec3f[key];
+						const Vec3f& f2 = i2.varying_vec3f[key];
+						input.varying_vec3f[key] = c0 * f0 + c1 * f1 + c2 * f2;
+					}
+
+					for (auto const& it : i0.varying_vec4f) {
+						int key = it.first;
+						const Vec4f& f0 = i0.varying_vec4f[key];
+						const Vec4f& f1 = i1.varying_vec4f[key];
+						const Vec4f& f2 = i2.varying_vec4f[key];
+						input.varying_vec4f[key] = c0 * f0 + c1 * f1 + c2 * f2;
+					}
+
+					// 执行像素着色器
+					Vec4f color = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+					if (_pixel_shader != NULL) {
+						color = _pixel_shader(input);
+					}
+
+				// 绘制到 framebuffer 上，这里可以加判断，如果 PS 返回的颜色 alpha 分量
+				// 小于等于零则放弃绘制，不过这样的话要把前面的更新深度缓存的代码挪下来，
+				// 只有需要渲染的时候才更新深度。
+					_frame_buffer->SetPixel(cx, cy, color);
+
+					// 绘制线框，再画一次避免覆盖
+					if (_render_frame) {
+						DrawLine(_vertex[0].spi.x, _vertex[0].spi.y, _vertex[1].spi.x, _vertex[1].spi.y);
+						DrawLine(_vertex[0].spi.x, _vertex[0].spi.y, _vertex[2].spi.x, _vertex[2].spi.y);
+						DrawLine(_vertex[2].spi.x, _vertex[2].spi.y, _vertex[1].spi.x, _vertex[1].spi.y);
+					}
+
+					return true;
+				}
+			}
 
 
 
@@ -372,13 +528,12 @@ public:
 
 
 
-
 protected:
 
 	// 顶点结构体
 	struct Vertex {
 		ShaderContext context;    // 上下文
-		float z;                // w 的倒数
+		float rhw;                // w 的倒数
 		Vec4f pos;                // 坐标
 		Vec2f spf;                // 浮点数屏幕坐标
 		Vec2i spi;                // 整数屏幕坐标
