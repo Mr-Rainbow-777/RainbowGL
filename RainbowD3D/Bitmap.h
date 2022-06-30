@@ -5,7 +5,50 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "Vector.h"
-#include "RenderHelp.h"
+
+
+
+
+
+//---------------------------------------------------------------------
+// 工具函数
+//---------------------------------------------------------------------
+template<typename T> inline T Abs(T x) { return (x < 0) ? (-x) : x; }
+template<typename T> inline T Max(T x, T y) { return (x < y) ? y : x; }
+template<typename T> inline T Min(T x, T y) { return (x > y) ? y : x; }
+
+template<typename T> inline bool NearEqual(T x, T y, T error) {
+	return (Abs(x - y) < error);
+}
+
+template<typename T> inline T Between(T xmin, T xmax, T x) {
+	return Min(Max(xmin, x), xmax);
+}
+
+// 截取 [0, 1] 的范围
+template<typename T> inline T Saturate(T x) {
+	return Between<T>(0, 1, x);
+}
+
+// 类型别名
+typedef Vector<2, float>  Vec2f;
+typedef Vector<2, double> Vec2d;
+typedef Vector<2, int>    Vec2i;
+typedef Vector<3, float>  Vec3f;
+typedef Vector<3, double> Vec3d;
+typedef Vector<3, int>    Vec3i;
+typedef Vector<4, float>  Vec4f;
+typedef Vector<4, double> Vec4d;
+typedef Vector<4, int>    Vec4i;
+
+typedef Matrix<4, 4, float> Mat4x4f;
+typedef Matrix<3, 3, float> Mat3x3f;
+typedef Matrix<4, 3, float> Mat4x3f;
+typedef Matrix<3, 4, float> Mat3x4f;
+
+
+
+ 
 
 //---------------------------------------------------------------------
 // 位图库：用于加载/保存图片，画点，画线，颜色读取
@@ -25,17 +68,7 @@ public:
 		memcpy(_bits, src._bits, _pitch * _h);
 	}
 
-	inline Bitmap(const char* filename) {
-		Bitmap* tmp = LoadFile(filename);
-		if (tmp == NULL) {
-			std::string msg = "load failed: ";
-			msg.append(filename);
-			throw std::runtime_error(msg);
-		}
-		_w = tmp->_w; _h = tmp->_h; _pitch = tmp->_pitch; _bits = tmp->_bits;
-		tmp->_bits = NULL;
-		delete tmp;
-	}
+
 
 public:
 	inline int GetW() const { return _w; }
@@ -127,8 +160,8 @@ public:
 	};
 
 	// 读取 BMP 图片，支持 24/32 位两种格式
-	inline static Bitmap* LoadFile(const char* filename) {
-		FILE* fp = fopen(filename, "rb");
+	inline static Bitmap* LoadFile(FILE* fp,const char* filename) {
+		errno_t err = fopen_s(&fp,filename, "rb");
 		if (fp == NULL) return NULL;
 		BITMAPINFOHEADER info;
 		uint8_t header[14];    //8位一个字节    以一个字节的offset来读取14个内存块
@@ -157,8 +190,8 @@ public:
 	}
 
 	// 保存 BMP 图片
-	inline bool SaveFile(const char* filename, bool withAlpha = false) const {
-		FILE* fp = fopen(filename, "wb");
+	inline bool SaveFile(FILE* fp,const char* filename, bool withAlpha = false) const {
+		errno_t err = fopen_s(&fp,filename, "wb");
 		if (fp == NULL) return false;
 		BITMAPINFOHEADER info;
 		uint32_t pixelsize = (withAlpha) ? 4 : 3;
@@ -211,6 +244,30 @@ public:
 		uint32_t c10 = GetPixel(x1, y2);
 		uint32_t c11 = GetPixel(x2, y2);
 		return BilinearInterp(c00, c01, c10, c11, dx, dy);
+	}
+
+	// 矢量转整数颜色
+	inline static uint32_t vector_to_color(const Vec4f& color) {
+		uint32_t r = (uint32_t)Between(0, 255, (int)(color.r * 255.0f));
+		uint32_t g = (uint32_t)Between(0, 255, (int)(color.g * 255.0f));
+		uint32_t b = (uint32_t)Between(0, 255, (int)(color.b * 255.0f));
+		uint32_t a = (uint32_t)Between(0, 255, (int)(color.a * 255.0f));
+		return (r << 16) | (g << 8) | b | (a << 24);
+	}
+
+	// 矢量转换整数颜色
+	inline static uint32_t vector_to_color(const Vec3f& color) {
+		return vector_to_color(color.xyz1());
+	}
+
+	// 整数颜色到矢量
+	inline static Vec4f vector_from_color(uint32_t rgba) {
+		Vec4f out;
+		out.r = ((rgba >> 16) & 0xff) / 255.0f;
+		out.g = ((rgba >> 8) & 0xff) / 255.0f;
+		out.b = ((rgba >> 0) & 0xff) / 255.0f;
+		out.a = ((rgba >> 24) & 0xff) / 255.0f;
+		return out;
 	}
 
 	// 纹理采样

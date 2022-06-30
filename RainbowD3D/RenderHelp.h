@@ -10,71 +10,9 @@
 #include "Bitmap.h"
 
 
-//---------------------------------------------------------------------
-// 工具函数
-//---------------------------------------------------------------------
-template<typename T> inline T Abs(T x) { return (x < 0) ? (-x) : x; }
-template<typename T> inline T Max(T x, T y) { return (x < y) ? y : x; }
-template<typename T> inline T Min(T x, T y) { return (x > y) ? y : x; }
-
-template<typename T> inline bool NearEqual(T x, T y, T error) {
-	return (Abs(x - y) < error);
-}
-
-template<typename T> inline T Between(T xmin, T xmax, T x) {
-	return Min(Max(xmin, x), xmax);
-}
-
-// 截取 [0, 1] 的范围
-template<typename T> inline T Saturate(T x) {
-	return Between<T>(0, 1, x);
-}
-
-// 类型别名
-typedef Vector<2, float>  Vec2f;
-typedef Vector<2, double> Vec2d;
-typedef Vector<2, int>    Vec2i;
-typedef Vector<3, float>  Vec3f;
-typedef Vector<3, double> Vec3d;
-typedef Vector<3, int>    Vec3i;
-typedef Vector<4, float>  Vec4f;
-typedef Vector<4, double> Vec4d;
-typedef Vector<4, int>    Vec4i;
-
-typedef Matrix<4, 4, float> Mat4x4f;
-typedef Matrix<3, 3, float> Mat3x3f;
-typedef Matrix<4, 3, float> Mat4x3f;
-typedef Matrix<3, 4, float> Mat3x4f;
 
 
-//---------------------------------------------------------------------
-// 3D 数学运算
-//---------------------------------------------------------------------
 
-
-// 矢量转整数颜色
-inline static uint32_t vector_to_color(const Vec4f& color) {
-	uint32_t r = (uint32_t)Between(0, 255, (int)(color.r * 255.0f));
-	uint32_t g = (uint32_t)Between(0, 255, (int)(color.g * 255.0f));
-	uint32_t b = (uint32_t)Between(0, 255, (int)(color.b * 255.0f));
-	uint32_t a = (uint32_t)Between(0, 255, (int)(color.a * 255.0f));
-	return (r << 16) | (g << 8) | b | (a << 24);
-}
-
-// 矢量转换整数颜色
-inline static uint32_t vector_to_color(const Vec3f& color) {
-	return vector_to_color(color.xyz1());
-}
-
-// 整数颜色到矢量
-inline static Vec4f vector_from_color(uint32_t rgba) {
-	Vec4f out;
-	out.r = ((rgba >> 16) & 0xff) / 255.0f;
-	out.g = ((rgba >> 8) & 0xff) / 255.0f;
-	out.b = ((rgba >> 0) & 0xff) / 255.0f;
-	out.a = ((rgba >> 24) & 0xff) / 255.0f;
-	return out;
-}
 
 // matrix set to zero
 inline static Mat4x4f matrix_set_zero() {
@@ -267,7 +205,7 @@ public:
 	inline void SetPixelShader(PixelShader ps) { _pixel_shader = ps; }
 
 	// 保存 FrameBuffer 到 BMP 文件
-	inline void SaveFile(const char* filename) { if (_frame_buffer) _frame_buffer->SaveFile(filename); }
+	inline void SaveFile(FILE* fp,const char* filename) { if (_frame_buffer) _frame_buffer->SaveFile(fp,filename); }
 
 	// 设置背景/前景色
 	inline void SetBGColor(uint32_t color) { _color_bg = color; }
@@ -275,8 +213,8 @@ public:
 
 	// FrameBuffer 里画点
 	inline void SetPixel(int x, int y, uint32_t cc) { if (_frame_buffer) _frame_buffer->SetPixel(x, y, cc); }
-	inline void SetPixel(int x, int y, const Vec4f& cc) { SetPixel(x, y, vector_to_color(cc)); }
-	inline void SetPixel(int x, int y, const Vec3f& cc) { SetPixel(x, y, vector_to_color(cc)); }
+	inline void SetPixel(int x, int y, const Vec4f& cc) { SetPixel(x, y, Bitmap::vector_to_color(cc)); }
+	inline void SetPixel(int x, int y, const Vec3f& cc) { SetPixel(x, y, Bitmap::vector_to_color(cc)); }
 
 
 	// FrameBuffer 里画线
@@ -298,7 +236,7 @@ public:
 
 	inline bool edgeFunction(const Vec2f& p, const Vec2i v0, const Vec2i v1)
 	{
-		return (p.x - v0.x) * (v1.y - v0.y) - (p.y - v0.y) * (v1.x - v0.x) >= 0;
+		return (p.x - v0.x) * (v1.y - v0.y) - (p.y - v0.y) * (v1.x - v0.x) <= 0;
 	}
 
 
@@ -334,7 +272,7 @@ public:
 			// 这里图简单，当一个点越界，立马放弃整个三角形，更精细的做法是
 			// 如果越界了就在齐次空间内进行裁剪，拆分为 0-2 个三角形然后继续
 			if (w >= 0.0f) return false;
-			if (-w<=vertex.pos.z<=w) return false;
+			if (-w <= vertex.pos.z <= w) return false;
 			if (-w <= vertex.pos.y <= w) return false;
 			if (-w <= vertex.pos.x <= w) return false;
 
@@ -363,7 +301,7 @@ public:
 				_min_y = Between(0, _fb_height - 1, Min(_min_y, vertex.spi.y));
 				_max_y = Between(0, _fb_height - 1, Max(_max_y, vertex.spi.y));
 			}
-
+		}
 			// 如果不填充像素就退出
 			if (_render_pixel == false) return false;
 
@@ -441,14 +379,6 @@ public:
 					float c1 = vtx[1]->rhw * b * w;
 					float c2 = vtx[2]->rhw * c * w;
 
-					// 还原当前像素的 w
-					float w = 1.0f / ((rhw != 0.0f) ? rhw : 1.0f);
-
-					// 计算三个顶点插值 varying 的系数
-					// 先除以各自顶点的 w 然后进行屏幕空间插值然后再乘以当前 w
-					float c0 = vtx[0]->rhw * a * w;
-					float c1 = vtx[1]->rhw * b * w;
-					float c2 = vtx[2]->rhw * c * w;
 
 					// 准备为当前像素的各项 varying 进行插值  ，这个插值完的像素点数据需要传给片元着色器，进行像素着色处理
 					ShaderContext input;
@@ -509,11 +439,9 @@ public:
 						DrawLine(_vertex[0].spi.x, _vertex[0].spi.y, _vertex[2].spi.x, _vertex[2].spi.y);
 						DrawLine(_vertex[2].spi.x, _vertex[2].spi.y, _vertex[1].spi.x, _vertex[1].spi.y);
 					}
-
-					return true;
 				}
 			}
-
+			return true;
 
 
 
@@ -523,7 +451,8 @@ public:
 
 
 
-	}
+	
+	
 
 
 

@@ -100,150 +100,144 @@ template<size_t ROW, size_t COL, typename T> struct Matrix {
 		return ret;
 	}
 
-
-
-
-
+};
 //---------------------------------------------------------------------
 // 数学库：矩阵运符
 //---------------------------------------------------------------------
 
 	//==
-	template<size_t ROW, size_t COL, typename T>
-	inline bool operator == (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
-		for (size_t r = 0; r < ROW; r++) {
-			for (size_t c = 0; c < COL; c++) {
-				if (a.m[r][c] != b.m[r][c]) return false;
-			}
+template<size_t ROW, size_t COL, typename T>
+inline bool operator == (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
+	for (size_t r = 0; r < ROW; r++) {
+		for (size_t c = 0; c < COL; c++) {
+			if (a.m[r][c] != b.m[r][c]) return false;
 		}
-		return true;
 	}
+	return true;
+}
 
-	//!=
-	template<size_t ROW, size_t COL, typename T>
-	inline bool operator != (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
-		return !(a == b);
-	}
+//!=
+template<size_t ROW, size_t COL, typename T>
+inline bool operator != (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
+	return !(a == b);
+}
 
-	//+ 取正
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator + (const Matrix<ROW, COL, T>& src) {
-		return src;
-	}
-
-
-	//-   取负
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator - (const Matrix<ROW, COL, T>& src) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++)
-				out.m[j][i] = -src.m[j][i];
-		}
-		return out;
-	}
-
-	//+     
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator + (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++)
-				out.m[j][i] = a.m[j][i] + b.m[j][i];
-		}
-		return out;
-	}
+//+ 取正
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator + (const Matrix<ROW, COL, T>& src) {
+	return src;
+}
 
 
-	//-
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator - (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++)
-				out.m[j][i] = a.m[j][i] - b.m[j][i];
-		}
-		return out;
-	}
-
-	//*
-	template<size_t ROW, size_t COL, size_t NEWCOL, typename T>
-	inline Matrix<ROW, NEWCOL, T> operator * (const Matrix<ROW, COL, T>& a, const Matrix<COL, NEWCOL, T>& b) {
-		Matrix<ROW, NEWCOL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < NEWCOL; i++) {
-				out.m[j][i] = vector_dot(a.Row(j), b.Col(i));
-			}
-		}
-		return out;
-	}
-
-
-
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator * (const Matrix<ROW, COL, T>& a, T x) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++) {
-				out.m[j][i] = a.m[j][i] * x;
-			}
-		}
-		return out;
-	}
-
-
-	//   /除法运算
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator / (const Matrix<ROW, COL, T>& a, T x) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++) {
-				out.m[j][i] = a.m[j][i] / x;
-			}
-		}
-		return out;
-	}
-
-	//   常数相乘
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator * (T x, const Matrix<ROW, COL, T>& a) {
-		return (a * x);
-	}
-
-	//  常数除法
-	template<size_t ROW, size_t COL, typename T>
-	inline Matrix<ROW, COL, T> operator / (T x, const Matrix<ROW, COL, T>& a) {
-		Matrix<ROW, COL, T> out;
-		for (size_t j = 0; j < ROW; j++) {
-			for (size_t i = 0; i < COL; i++) {
-				out.m[j][i] = x / a.m[j][i];
-			}
-		}
-		return out;
-	}
-
-
-	//    向量*矩阵（行向量）右乘运算
-	template<size_t ROW, size_t COL, typename T>
-	inline Vector<COL, T> operator * (const Vector<ROW, T>& a, const Matrix<ROW, COL, T>& m) {
-		Vector<COL, T> b;
+//-   取负
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator - (const Matrix<ROW, COL, T>& src) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
 		for (size_t i = 0; i < COL; i++)
-			b[i] = vector_dot(a, m.Col(i));
-		return b;
+			out.m[j][i] = -src.m[j][i];
 	}
+	return out;
+}
 
-
-	//   矩阵*向量（列向量）左乘运算
-	template<size_t ROW, size_t COL, typename T>
-	inline Vector<ROW, T> operator * (const Matrix<ROW, COL, T>& m, const Vector<COL, T>& a) {
-		Vector<ROW, T> b;
-		for (size_t i = 0; i < ROW; i++)
-			b[i] = vector_dot(a, m.Row(i));
-		return b;
+//+     
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator + (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < COL; i++)
+			out.m[j][i] = a.m[j][i] + b.m[j][i];
 	}
+	return out;
+}
 
-};
 
+//-
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator - (const Matrix<ROW, COL, T>& a, const Matrix<ROW, COL, T>& b) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < COL; i++)
+			out.m[j][i] = a.m[j][i] - b.m[j][i];
+	}
+	return out;
+}
+
+//*
+template<size_t ROW, size_t COL, size_t NEWCOL, typename T>
+inline Matrix<ROW, NEWCOL, T> operator * (const Matrix<ROW, COL, T>& a, const Matrix<COL, NEWCOL, T>& b) {
+	Matrix<ROW, NEWCOL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < NEWCOL; i++) {
+			out.m[j][i] = vector_dot(a.Row(j), b.Col(i));
+		}
+	}
+	return out;
+}
+
+
+
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator * (const Matrix<ROW, COL, T>& a, T x) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < COL; i++) {
+			out.m[j][i] = a.m[j][i] * x;
+		}
+	}
+	return out;
+}
+
+
+//   /除法运算
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator / (const Matrix<ROW, COL, T>& a, T x) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < COL; i++) {
+			out.m[j][i] = a.m[j][i] / x;
+		}
+	}
+	return out;
+}
+
+//   常数相乘
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator * (T x, const Matrix<ROW, COL, T>& a) {
+	return (a * x);
+}
+
+//  常数除法
+template<size_t ROW, size_t COL, typename T>
+inline Matrix<ROW, COL, T> operator / (T x, const Matrix<ROW, COL, T>& a) {
+	Matrix<ROW, COL, T> out;
+	for (size_t j = 0; j < ROW; j++) {
+		for (size_t i = 0; i < COL; i++) {
+			out.m[j][i] = x / a.m[j][i];
+		}
+	}
+	return out;
+}
+
+
+//    向量*矩阵（行向量）右乘运算
+template<size_t ROW, size_t COL, typename T>
+inline Vector<COL, T> operator * (const Vector<ROW, T>& a, const Matrix<ROW, COL, T>& m) {
+	Vector<COL, T> b;
+	for (size_t i = 0; i < COL; i++)
+		b[i] = vector_dot(a, m.Col(i));
+	return b;
+}
+
+
+//   矩阵*向量（列向量）左乘运算
+template<size_t ROW, size_t COL, typename T>
+inline Vector<ROW, T> operator * (const Matrix<ROW, COL, T>& m, const Vector<COL, T>& a) {
+	Vector<ROW, T> b;
+	for (size_t i = 0; i < ROW; i++)
+		b[i] = vector_dot(a, m.Row(i));
+	return b;
+}
 
 //---------------------------------------------------------------------
 // 数学库：行列式和逆矩阵等，光照计算有用
