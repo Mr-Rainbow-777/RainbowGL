@@ -59,7 +59,7 @@ inline static Mat4x4f Model2World_Matrix(const Vec3f& pos,const Vec3f& xAxis, co
 	m.SetRow(0, Vec4f(xAxis.x, xAxis.y, xAxis.z, 0));
 	m.SetRow(1, Vec4f(yAxis.x, yAxis.y, yAxis.z, 0));
 	m.SetRow(2, Vec4f(zAxis.x, zAxis.y, zAxis.z, 0));
-	m.SetCol(3, Vec4f(pos.x, pos.y, pos.z, 1.0f));
+	m.SetRow(3, Vec4f(pos.x, pos.y, pos.z, 1.0f));
 	return m;
 }
 
@@ -73,7 +73,7 @@ inline static Mat4x4f matrix_set_lookat(const Vec3f& eye, const Vec3f& at, const
 	m.SetRow(0, Vec4f(xaxis.x, xaxis.y, xaxis.z, 0));
 	m.SetRow(1, Vec4f(yaxis.x, yaxis.y, yaxis.z, 0));
 	m.SetRow(2, Vec4f(zaxis.x, zaxis.y, zaxis.z, 0));
-	m.SetCol(3, Vec4f(eye.x,eye.y,eye.z, 1.0f));
+	m.SetRow(3, Vec4f(eye.x,eye.y,eye.z, 1.0f));
 	return m;
 }
 
@@ -259,9 +259,6 @@ public:
 			vertex.context.varying_vec3f.clear();
 			vertex.context.varying_vec4f.clear();
 
-			// 运行顶点着色程序，返回顶点坐标
-			vertex.pos = _vertex_shader(i, vertex.context);
-
 			//此时处在裁剪空间下  顶点已经经过MVP矩阵变换
 			// 运行顶点着色程序，返回顶点坐标
 			vertex.pos = _vertex_shader(i, vertex.context);
@@ -271,12 +268,11 @@ public:
 
 			// 这里图简单，当一个点越界，立马放弃整个三角形，更精细的做法是
 			// 如果越界了就在齐次空间内进行裁剪，拆分为 0-2 个三角形然后继续
-			if (w >= 0.0f) return false;
-			if (-w <= vertex.pos.z <= w) return false;
-			if (-w <= vertex.pos.y <= w) return false;
-			if (-w <= vertex.pos.x <= w) return false;
+			if (w <= 0.0f) return false;
+			if (vertex.pos.y > w||vertex.pos.y<-w) return false;
+			if (vertex.pos.x > w || vertex.pos.x < -w) return false;
 
-			vertex.rhw = -1 / vertex.pos.w;   //此时的w是-z  我们将它倒置然后取反，得到的是线性的深度值，避免了ZFighting
+			vertex.rhw = 1 / vertex.pos.w;   //此时的w是-z  我们将它倒置然后取反，得到的是线性的深度值，避免了ZFighting
 
 			// 齐次坐标空间 /w 归一化到单位体积 cvv     转换到NDC坐标
 			vertex.pos *= vertex.rhw;

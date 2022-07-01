@@ -222,7 +222,7 @@ inline Matrix<ROW, COL, T> operator / (T x, const Matrix<ROW, COL, T>& a) {
 
 //    向量*矩阵（行向量）右乘运算
 template<size_t ROW, size_t COL, typename T>
-inline Vector<COL, T> operator * (const Vector<ROW, T>& a, const Matrix<ROW, COL, T>& m) {
+inline Vector<COL, T> operator * (const Vector<COL, T>& a, const Matrix<ROW, COL, T>& m) {
 	Vector<COL, T> b;
 	for (size_t i = 0; i < COL; i++)
 		b[i] = vector_dot(a, m.Col(i));
@@ -232,7 +232,7 @@ inline Vector<COL, T> operator * (const Vector<ROW, T>& a, const Matrix<ROW, COL
 
 //   矩阵*向量（列向量）左乘运算
 template<size_t ROW, size_t COL, typename T>
-inline Vector<ROW, T> operator * (const Matrix<ROW, COL, T>& m, const Vector<COL, T>& a) {
+inline Vector<ROW, T> operator * (const Matrix<ROW, COL, T>& m, const Vector<ROW, T>& a) {
 	Vector<ROW, T> b;
 	for (size_t i = 0; i < ROW; i++)
 		b[i] = vector_dot(a, m.Row(i));
