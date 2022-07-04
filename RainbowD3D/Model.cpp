@@ -10,12 +10,12 @@ int main()
 	RenderHelp rh(600, 800);
 
 	// 加载模型
-	Model model("Model/box_stack.obj");
+	Model model("Model/diablo3_pose.obj");
 
-	Vec3f eye_pos = { 0, 2, -10 };
+	Vec3f eye_pos = { 0, 0, 2 };
 	Vec3f eye_at = { 0, 0, 1 };
 	Vec3f eye_up = { 0, -1, 0 };
-	//Vec3f light_dir = { 1, 1, 0.85 };			// 光的方向
+	Vec3f light_dir = { 1, 1, 0.85 };			// 光的方向
 	float perspective = 3.1415926f * 0.5f;
 
 	Mat4x4f mat_model = matrix_set_scale(1, 1, 1);
@@ -31,19 +31,23 @@ int main()
 
 	const int VARYING_UV = 0;
 	const int VARYING_NORMAL = 1;
-	const int VARYING_COLOR = 0;
 
 	rh.SetVertexShader([&](int index, ShaderContext& output) -> Vec4f {
 		Vec4f pos = vs_input[index].pos.xyz1() * mat_mvp;
 		Vec4f normal = (vs_input[index].normal.xyz1() * mat_model_it);
 		output.varying_vec2f[VARYING_UV] = vs_input[index].uv;
 		output.varying_vec3f[VARYING_NORMAL] = normal.xyz(); // 转化为三维
-		output.varying_vec4f[VARYING_COLOR] = { 1, 0, 0, 1 };
 		return pos;
 		});
 
 	rh.SetPixelShader([&](ShaderContext& input) -> Vec4f {
-		return input.varying_vec4f[VARYING_COLOR];
+		Vec2f uv = input.varying_vec2f[VARYING_UV];
+		Vec3f n = input.varying_vec3f[VARYING_NORMAL];
+		Vec3f l = vector_normalize(light_dir);
+		Vec4f color = model.diffuse(uv);	// 从模型取得纹理颜色
+		// 点乘 n,l 获得光照强度，Saturate 可以对范围 [0,1] 裁剪
+		float intense = Saturate(vector_dot(n, l)) + 0.1;
+		return color * intense;
 		});
 
 	// 迭代模型每一个面

@@ -184,7 +184,7 @@ public:
 		for (int j = 0; j < height; j++) {
 			_depth_buffer[j] = new float[width];
 		}
-		Clear();
+		Clear();  //全部置零
 	}
 
 	// 清空 FrameBuffer 和深度缓存

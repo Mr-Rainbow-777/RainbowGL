@@ -70,7 +70,7 @@ public:
 			}
 		}
 		std::cout << "# v# " << _verts.size() << " f# " << _faces.size() << "\n";
-		//_diffusemap = load_texture(filename, "_diffuse.bmp");
+		_diffusemap = load_texture(filename, "_diffuse.bmp");
 		//_normalmap = load_texture(filename, "_nm.bmp");
 		//_specularmap = load_texture(filename, "_spec.bmp");
 	}
